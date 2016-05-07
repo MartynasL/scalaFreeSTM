@@ -20,7 +20,7 @@ object ScalaFreeSTM {
     }
   }
   
-  final class TVal[A](private[ScalaFreeSTM] val tRef: Ref[A])
+  final class SafeVal[A](private[ScalaFreeSTM] val tRef: Ref[A])
 
   //Operation definitions
   sealed trait STMOp[A]
@@ -32,9 +32,9 @@ object ScalaFreeSTM {
     case class CountTSet[A](set: SafeSet[A]) extends STMOp[Int]
     
     //one value variable operations
-    case class NewTVal[A](value: A) extends STMOp[TVal[A]]
-    case class ReadTVal[A](tVal: TVal[A]) extends STMOp[A]
-    case class WriteTVal[A](value: A, tVal: TVal[A]) extends STMOp[Unit]
+    case class NewTVal[A](value: A) extends STMOp[SafeVal[A]]
+    case class ReadTVal[A](tVal: SafeVal[A]) extends STMOp[A]
+    case class WriteTVal[A](value: A, tVal: SafeVal[A]) extends STMOp[Unit]
     
     //basic operations
     case object Retry extends STMOp[Unit]  
@@ -49,9 +49,9 @@ object ScalaFreeSTM {
   def removeTSet[A](value: A, set: SafeSet[A]): FreeSTM[Unit] = liftFC[STMOp, Unit](RemoveTSet(value, set))
   def countTSet[A](set: SafeSet[A]): FreeSTM[Int] = liftFC[STMOp, Int](CountTSet(set))
   
-  def newTVal[A](value: A): FreeSTM[TVal[A]] = liftFC[STMOp, TVal[A]](NewTVal(value))
-  def readTVal[A](tVal: TVal[A]): FreeSTM[A] = liftFC[STMOp, A](ReadTVal(tVal))
-  def writeTVal[A](value: A, tVal:TVal[A]): FreeSTM[Unit] = liftFC[STMOp, Unit](WriteTVal(value, tVal))
+  def newTVal[A](value: A): FreeSTM[SafeVal[A]] = liftFC[STMOp, SafeVal[A]](NewTVal(value))
+  def readTVal[A](tVal: SafeVal[A]): FreeSTM[A] = liftFC[STMOp, A](ReadTVal(tVal))
+  def writeTVal[A](value: A, tVal:SafeVal[A]): FreeSTM[Unit] = liftFC[STMOp, Unit](WriteTVal(value, tVal))
   
   val retry: FreeSTM[Unit] = liftFC[STMOp, Unit](Retry)
 
@@ -69,7 +69,7 @@ object ScalaFreeSTM {
           case Retry                  => { implicit txn => scala.concurrent.stm.retry }
           
           //Val interpreting
-          case NewTVal(value) => {implicit txn => new TVal(Ref(value))}
+          case NewTVal(value) => {implicit txn => new SafeVal(Ref(value))}
           case ReadTVal(tVal) => {implicit txn => tVal.tRef()}
           case WriteTVal(value, tVal) => {implicit txn => tVal.tRef() = value}
         }
