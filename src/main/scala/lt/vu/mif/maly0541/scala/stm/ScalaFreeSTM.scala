@@ -87,7 +87,7 @@ object ScalaFreeSTM {
     }
   }
 
-  def checkAndRun(expression: Boolean, f: FreeSTM[Unit]): FreeSTM[Unit] = {
-    expression ? ().point[FreeSTM] | f
+  def checkAndRunIfTrue(expression: Boolean, f: FreeSTM[Unit]): FreeSTM[Unit] = {
+    expression ? f | ().point[FreeSTM]
   }
 }
