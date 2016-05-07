@@ -19,6 +19,8 @@ object ScalaFreeSTM {
       tSet.-=(value)
     }
   }
+  
+  final class TVal[A](private[ScalaFreeSTM] val tRef: Ref[A])
 
   //Operation definitions
   sealed trait STMOp[A]
@@ -28,7 +30,14 @@ object ScalaFreeSTM {
     case class AddTSet[A](value: A, set: SafeSet[A]) extends STMOp[Unit]
     case class RemoveTSet[A](value: A, set: SafeSet[A]) extends STMOp[Unit]
     case class CountTSet[A](set: SafeSet[A]) extends STMOp[Int]
-    case object Retry extends STMOp[Unit]    
+    
+    //one value variable operations
+    case class NewTVal[A](value: A) extends STMOp[TVal[A]]
+    case class ReadTVal[A](tVal: TVal[A]) extends STMOp[A]
+    case class WriteTVal[A](value: A, tVal: TVal[A]) extends STMOp[Unit]
+    
+    //basic operations
+    case object Retry extends STMOp[Unit]  
   }
   import STMOp._
 
@@ -39,20 +48,37 @@ object ScalaFreeSTM {
   def addTSet[A](value: A, set: SafeSet[A]): FreeSTM[Unit] = liftFC[STMOp, Unit](AddTSet(value, set))
   def removeTSet[A](value: A, set: SafeSet[A]): FreeSTM[Unit] = liftFC[STMOp, Unit](RemoveTSet(value, set))
   def countTSet[A](set: SafeSet[A]): FreeSTM[Int] = liftFC[STMOp, Int](CountTSet(set))
-  val retry: FreeSTM[Unit] = liftFC(Retry)
+  
+  def newTVal[A](value: A): FreeSTM[TVal[A]] = liftFC[STMOp, TVal[A]](NewTVal(value))
+  def readTVal[A](tVal: TVal[A]): FreeSTM[A] = liftFC[STMOp, A](ReadTVal(tVal))
+  def writeTVal[A](value: A, tVal:TVal[A]): FreeSTM[Unit] = liftFC[STMOp, Unit](WriteTVal(value, tVal))
+  
+  val retry: FreeSTM[Unit] = liftFC[STMOp, Unit](Retry)
 
   //Interpreter
-  private type InTxnReader[A] = InTxn => A
-  private val interpOp: STMOp ~> InTxnReader =
-    new (STMOp ~> InTxnReader) {
-      def apply[A](op: STMOp[A]): InTxnReader[A] = {
+  private type InTxnInterpreter[A] = InTxn => A
+  private val interpretOp: STMOp ~> InTxnInterpreter =
+    new (STMOp ~> InTxnInterpreter) {
+      def apply[A](op: STMOp[A]): InTxnInterpreter[A] = {
         op match {
+          //Set interpreting
           case NewTSet()              => { implicit txn => new SafeSet(TSet()) }
           case AddTSet(value, set)    => { implicit txn => set.add(value) }
           case RemoveTSet(value, set) => { implicit txn => set.remove(value) }
           case CountTSet(set)         => { implicit txn => set.tSet.size }
           case Retry                  => { implicit txn => scala.concurrent.stm.retry }
+          
+          //Val interpreting
+          case NewTVal(value) => {implicit txn => new TVal(Ref(value))}
+          case ReadTVal(tVal) => {implicit txn => tVal.tRef()}
+          case WriteTVal(value, tVal) => {implicit txn => tVal.tRef() = value}
         }
       }
     }
+  
+  def runTransaction[A](trans: FreeSTM[A]) {
+    atomic {
+      runFC[STMOp, InTxnInterpreter, A](trans)(interpretOp)
+    }
+  }
 }
