@@ -13,11 +13,11 @@ object ScalaFreeSTM {
   final class SafeSet[A]() {
     private[ScalaFreeSTM] val tSet: TSet[A] = TSet()
 
-    def add(value: A)(implicit txn: InTxn): Unit = {
+    private[ScalaFreeSTM] def add(value: A)(implicit txn: InTxn): Unit = {
       tSet.+=(value)
     }
 
-    def remove(value: A)(implicit txn: InTxn): Unit = {
+    private[ScalaFreeSTM] def remove(value: A)(implicit txn: InTxn): Unit = {
       tSet.-=(value)
     }
   }
