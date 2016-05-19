@@ -56,6 +56,7 @@ object ScalaFreeSTM {
   //  def newTVal[A](value: A): FreeSTM[SafeVal[A]] = liftFC[STMOp, SafeVal[A]](NewTVal(value))
   def readTVal[A](tVal: SafeVal[A]): FreeSTM[A] = liftFC[STMOp, A](ReadTVal(tVal))
   def writeTVal[A](value: A, tVal: SafeVal[A]): FreeSTM[Unit] = liftFC[STMOp, Unit](WriteTVal(value, tVal))
+  def pointed[A](a: A) = Monad[FreeSTM].point(a)
 
   val retry: FreeSTM[Unit] = liftFC[STMOp, Unit](Retry)
 
@@ -81,11 +82,10 @@ object ScalaFreeSTM {
       }
     }
 
-  def runTransaction[A](trans: FreeSTM[A]) {
+  def runTransaction[A](trans: FreeSTM[A]) =
     atomic {
       runFC[STMOp, InTxnInterpreter, A](trans)(interpretOp)
     }
-  }
 
   def checkAndRunIfTrue(expression: Boolean, f: FreeSTM[Unit]): FreeSTM[Unit] = {
     expression ? f | ().point[FreeSTM]
